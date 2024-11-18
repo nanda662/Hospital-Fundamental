@@ -243,17 +243,107 @@ INSERT INTO Internacao_Enfermeiro (id_inter, id_enfe) VALUES
 
 ```
 
-# PARTE 4 - Alterando o banco de dados
+# PARTE 4 - Alterando o banco de dados :pushpin:
 
 </br>
 
 ```sql
--- Adicionar a coluna "em_atividade" à tabela Medico
+-- colocando a coluna "em_atividade" 
 ALTER TABLE Medico
 ADD COLUMN em_atividade BOOLEAN DEFAULT TRUE;
 
--- Atualizar o status de atividade dos médicos
--- Definir dois médicos como inativos e os demais como ativos
+-- Atualizar o status do medico
 UPDATE Medico SET em_atividade = FALSE WHERE medico_id IN (1, 2);
 UPDATE Medico SET em_atividade = TRUE WHERE medico_id NOT IN (1, 2);
+```
+</br>
+
+# PARTE 5 - Consultas :pushpin:
+</br>
+
+```sql
+-- 1. Todos os dados e o valor médio das consultas do ano de 2020 e das que foram feitas sob convênio.
+SELECT *, AVG(valor_consult) AS valor_medio
+FROM Consulta
+WHERE YEAR(dt_hr) = 2020 OR convenio_id IS NOT NULL;
+
+-- 2. Todos os dados das internações que tiveram data de alta maior que a data prevista para a alta.
+SELECT * 
+FROM Internacao
+WHERE data_alta > data_prev_alta;
+
+-- 3. Receituário completo da primeira consulta registrada com receituário associado.
+SELECT r.*, ir.*, m.nome AS nome_medicamento, m.descricao AS descricao_medicamento
+FROM Receita r
+JOIN Item_Receita ir ON r.receita_id = ir.receita_id
+JOIN Medicamento m ON ir.med_id = m.med_id
+WHERE r.consulta_id = (SELECT MIN(consulta_id) FROM Receita);
+
+-- 4. Todos os dados da consulta de maior valor e também da de menor valor (ambas as consultas não foram realizadas sob convênio).
+SELECT * 
+FROM Consulta
+WHERE convenio_id IS NULL
+ORDER BY valor_consult DESC
+LIMIT 1;
+
+SELECT * 
+FROM Consulta
+WHERE convenio_id IS NULL
+ORDER BY valor_consult ASC
+LIMIT 1;
+
+-- 5. Todos os dados das internações em seus respectivos quartos, calculando o total da internação.
+SELECT i.*, q.numero AS numero_quarto, t.descricao AS tipo_quarto, 
+       t.valor_diaria * DATEDIFF(data_alta, data_entrada) AS total_internacao
+FROM Internacao i
+JOIN Quarto q ON i.id_quarto = q.id_quarto
+JOIN Tipo_Quarto t ON q.tipo = t.id_tipo;
+
+-- 6. Data, procedimento e número de quarto de internações em quartos do tipo “apartamento”.
+SELECT i.data_entrada, i.procedimento, q.numero AS numero_quarto
+FROM Internacao i
+JOIN Quarto q ON i.id_quarto = q.id_quarto
+JOIN Tipo_Quarto t ON q.tipo = t.id_tipo
+WHERE t.descricao = 'apartamento';
+
+-- 7. Nome do paciente, data da consulta e especialidade de todas as consultas em que os pacientes eram menores de 18 anos e a especialidade não seja “pediatria”.
+SELECT p.nome AS nome_paciente, c.dt_hr AS data_consulta, e.descricao AS especialidade
+FROM Consulta c
+JOIN Paciente p ON c.paciente_id = p.paciente_id
+JOIN Especialidade e ON c.especialidade_id = e.especialidade_id
+WHERE TIMESTAMPDIFF(YEAR, p.datanasc, c.dt_hr) < 18
+  AND e.descricao != 'pediatria'
+ORDER BY c.dt_hr;
+
+-- 8. Nome do paciente, nome do médico, data da internação e procedimentos das internações realizadas por médicos da especialidade “gastroenterologia”, que tenham acontecido em “enfermaria”.
+SELECT p.nome AS nome_paciente, m.nome AS nome_medico, i.data_entrada, i.procedimento
+FROM Internacao i
+JOIN Paciente p ON i.paciente_id = p.paciente_id
+JOIN Medico m ON i.medico_id = m.medico_id
+JOIN Rel_Medico_Especialidade re ON m.medico_id = re.medico_id
+JOIN Especialidade e ON re.especialidade_id = e.especialidade_id
+JOIN Quarto q ON i.id_quarto = q.id_quarto
+JOIN Tipo_Quarto t ON q.tipo = t.id_tipo
+WHERE e.descricao = 'gastroenterologia'
+  AND t.descricao = 'enfermaria';
+
+-- 9. Os nomes dos médicos, seus CRMs e a quantidade de consultas que cada um realizou.
+SELECT m.nome AS nome_medico, m.crm, COUNT(c.consulta_id) AS qtd_consultas
+FROM Medico m
+LEFT JOIN Consulta c ON m.medico_id = c.medico_id
+GROUP BY m.medico_id;
+
+-- 10. Todos os médicos que tenham "Gabriel" no nome.
+SELECT *
+FROM Medico
+WHERE nome LIKE '%Gabriel%';
+
+-- 11. Os nomes, CREs e número de internações de enfermeiros que participaram de mais de uma internação.
+SELECT e.nome AS nome_enfermeiro, e.cne AS cre, COUNT(i.id_inter) AS qtd_internacoes
+FROM Enfermeiro e
+JOIN Rel_Internacao_Enfermeiro rei ON e.id_enfe = rei.id_enfe
+JOIN Internacao i ON rei.id_inter = i.id_inter
+GROUP BY e.id_enfe
+HAVING COUNT(i.id_inter) > 1;
+
 ```
